@@ -9,239 +9,248 @@ from PIL import Image
 import io
 import base64
 from datetime import datetime
+import re
+from astropy.io import fits
 
 app = Flask(__name__)
 
-print("🚀 ONC:ES - Batch Processing with Logo")
+print("🚀 ONC:ES - Dual Band Processing")
 
-# Codificar logo a base64
+# Codificar logo
 def encode_logo(logo_path):
-    """Convertir logo a base64 para HTML"""
     try:
         with open(logo_path, "rb") as logo_file:
             return base64.b64encode(logo_file.read()).decode('utf-8')
-    except Exception as e:
-        print(f"⚠️  Logo no encontrado: {e}")
+    except:
         return None
 
 LOGO_BASE64 = encode_logo('logo.png')
 
-# Cargar modelo con nombre personalizado
+# Cargar modelo
 def load_model():
-    model_paths = ['m_final.keras', 'model.keras', 'model.h5']
-    for path in model_paths:
-        try:
-            if os.path.exists(path):
-                model = tf.keras.models.load_model(path)
-                print(f"✅ Modelo cargado desde: {path}")
-                return model
-        except Exception as e:
-            print(f"❌ Error cargando {path}: {e}")
-            continue
-    
-    print("⚠️  Creando modelo de demostración")
-    model = tf.keras.Sequential([
-        tf.keras.layers.Input(shape=(60, 60, 2)),
-        tf.keras.layers.Flatten(),
-        tf.keras.layers.Dense(1, activation='sigmoid')
-    ])
+    path = 'm_final.keras'
+    model = tf.keras.models.load_model(path)
+    print("✅ Modelo cargado")
     return model
+
 
 model = load_model()
 
-# HTML template con logo y múltiples imágenes
+def extract_galaxy_id(filename):
+    """Extraer ID de galaxia del nombre de archivo"""
+    # Ejemplo: "galaxy123_g.jpg" → "galaxy123"
+    patterns = [
+        r'(.+?)[_\-](u|g|r|i|u|z)\.',  # galaxy123_g.jpg
+        r'(.+?)(u|g|r|i|u|z)\.',       # galaxy123g.jpg
+        r'(.+?)\.'                    # galaxy123.jpg
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, filename, re.IGNORECASE)
+        if match:
+            return match.group(1).lower()
+    
+    return filename  # Si no se encuentra patrón, usar nombre completo
+
+# HTML template para dos bandas
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
 <head>
-    <title>ONC:ES - Batch Classification</title>
+    <title>ONC:ES - Optimized Neural Classifier: Elliptical vs. Spiral</title>
     <style>
         body {{ 
             font-family: 'Arial', sans-serif; 
-            max-width: 800px; 
+            max-width: 900px; 
             margin: 50px auto; 
             padding: 20px;
             background: linear-gradient(135deg, #0c0c2d 0%, #1a1a4a 100%);
             color: white;
         }}
-        .header {{ 
-            text-align: center; 
-            margin-bottom: 30px;
-        }}
-        .logo-img {{
-            height: 100px;
-            margin-bottom: 15px;
-        }}
-        .title {{
+        .header {{ text-align: center; margin-bottom: 30px; }}
+        .logo-img {{ height: 100px; margin-bottom: 15px; }}
+        .title {{ 
             font-size: 2.2em; 
             font-weight: bold; 
             background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin: 10px 0;
         }}
-        .subtitle {{
-            opacity: 0.8;
-            margin-bottom: 20px;
+        .band-section {{
+            display: inline-block;
+            width: 45%;
+            margin: 10px;
+            vertical-align: top;
         }}
         .upload-box {{ 
             border: 3px dashed #4ecdc4; 
-            padding: 30px; 
-            margin: 20px 0; 
+            padding: 20px; 
+            margin: 15px 0; 
             text-align: center;
             border-radius: 15px;
             background: rgba(255, 255, 255, 0.1);
         }}
+        .band-g {{ border-color: #4ecdc4; }}   /* Turquesa para banda g */
+        .band-r {{ border-color: #ff6b6b; }}   /* Coral para banda r */
         .file-input {{
-            margin: 15px 0;
-            padding: 12px;
+            margin: 10px 0;
+            padding: 10px;
             background: white;
-            border-radius: 8px;
+            border-radius: 5px;
             color: #333;
-            width: 80%;
-            border: 2px solid transparent;
-        }}
-        .file-input:focus {{
-            border-color: #4ecdc4;
-            outline: none;
+            width: 90%;
         }}
         .submit-btn {{
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            background: linear-gradient(45deg, #4ecdc4, #ff6b6b);
             color: white;
             padding: 15px 40px;
             border: none;
-            border-radius: 30px;
-            font-size: 1.2em;
+            border-radius: 25px;
+            font-size: 1.1em;
             cursor: pointer;
-            margin-top: 20px;
-            transition: transform 0.3s, box-shadow 0.3s;
+            margin: 20px 0;
         }}
-        .submit-btn:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-        }}
-        .info-box {{
+        .instructions {{
             background: rgba(255, 255, 255, 0.05);
             padding: 15px;
             border-radius: 10px;
             margin: 20px 0;
-            border-left: 4px solid #ff6b6b;
-        }}
-        .feature-list {{
-            text-align: left;
-            margin: 15px 0;
-        }}
-        .feature-list li {{
-            margin: 8px 0;
         }}
     </style>
 </head>
 <body>
     <div class="header">
         {logo_html}
-        <div class="title">ONC:ES</div>
-        <div class="subtitle">Optimized Neural Classificator: Elliptical vs Spiral</div>
-        <p><em style="color: gray; font-style: italic;">Clasifícalo entonces</em>.</p>
+        <div class="title">ONC:ES - Optimized Neural Classifier</div>
+        <div>Banda g + Banda r → Clasificación</div>
     </div>
     
-    <div class="info-box">
-        <h3>🌌 Procesamiento de Lotes</h3>
-        <ul class="feature-list">
-            <li>✅ Sube múltiples imágenes simultáneamente</li>
-            <li>✅ Procesamiento por lotes eficiente</li>
-            <li>✅ Resultados en formato JSON/HTML</li>
-        </ul>
+    <div class="instructions">
+        <h3>📋 Instrucciones:</h3>
+        <ol>
+            <li>Sube imágenes de <strong>banda g</strong> en el primer buzón</li>
+            <li>Sube imágenes de <strong>banda r</strong> en el segundo buzón</li>
+            <li>Mismo número de archivos en ambos buzones</li>
+            <li>Mismo orden de galaxias en ambos conjuntos</li>
+            <li>Click en "Clasificar Galaxias"</li>
+        </ol>
     </div>
     
-    <form action="/predict_batch" method="post" enctype="multipart/form-data">
-        <div class="upload-box">
-            <h3>📤 Subir Imágenes</h3>
-            <input class="file-input" type="file" name="images" multiple accept=".jpg,.jpeg,.png,.fits">
-            <br>
-            <input class="submit-btn" type="submit" value="🚀 Clasificar Lote">
-            <p><small>Selecciona múltiples archivos (Ctrl+Click)</small></p>
+    <form action="/predict_dual_band" method="post" enctype="multipart/form-data">
+        <div class="band-section">
+            <div class="upload-box band-g">
+                <h3>🌌 Banda g</h3>
+                <input class="file-input" type="file" name="band_g" multiple accept=".jpg,.jpeg,.png">
+                <p>Imágenes en banda g</p>
+            </div>
+        </div>
+        
+        <div class="band-section">
+            <div class="upload-box band-i">
+                <h3>🌌 Banda r</h3>
+                <input class="file-input" type="file" name="band_r" multiple accept=".jpg,.jpeg,.png">
+                <p>Imágenes en banda r</p>
+            </div>
+        </div>
+        
+        <div style="text-align: center; clear: both;">
+            <input class="submit-btn" type="submit" value="🔍 Clasificar Galaxias">
         </div>
     </form>
 </body>
 </html>
 '''
 
-def process_image(file):
-    """Procesar una imagen individual"""
-    try:
-        img = Image.open(file.stream).convert('L')
-        img = img.resize((60, 60))
-        img_array = np.array(img) / 255.0
-        img_array = np.stack([img_array, img_array], axis=-1)
-        img_array = np.expand_dims(img_array, axis=0)
-        return img_array
-    except Exception as e:
-        raise Exception(f"Error procesando imagen: {str(e)}")
-
-def predict_image(img_array, filename):
-    """Predecir una imagen y retornar resultados"""
-    try:
-        prediction = model.predict(img_array, verbose=0)
-        prob = float(prediction[0][0])
-        
-        label = "Elíptica" if prob > 0.5 else "Espiral"
-        confidence = prob if prob > 0.5 else 1 - prob
-        
-        return {
-            'filename': filename,
-            'label': label,
-            'confidence': round(confidence, 4),
-            'probability': round(prob, 4),
-            'success': True
-        }
-    except Exception as e:
-        raise Exception(f"Error en predicción: {str(e)}")
-
 @app.route('/')
 def home():
     logo_html = f'<img class="logo-img" src="data:image/png;base64,{LOGO_BASE64}" alt="ONC:ES Logo">' if LOGO_BASE64 else ''
     return HTML_TEMPLATE.format(logo_html=logo_html)
 
-@app.route('/predict_batch', methods=['POST'])
-def predict_batch():
+@app.route('/predict_dual_band', methods=['POST'])
+def predict_dual_band():
     try:
-        if 'images' not in request.files:
-            return jsonify({'error': 'No se subieron imágenes'}), 400
+        # Verificar que se subieron ambas bandas (CORREGIDO: band_r en lugar de band_i)
+        if 'band_g' not in request.files or 'band_r' not in request.files:
+            return jsonify({'error': 'Se requieren ambas bandas (g y r)'}), 400
         
-        files = request.files.getlist('images')
-        if not files or files[0].filename == '':
-            return jsonify({'error': 'No se seleccionaron archivos'}), 400
+        band_g_files = request.files.getlist('band_g')
+        band_r_files = request.files.getlist('band_r')  # Corregido: band_r en lugar de band_i
+        
+        # Verificación corregida
+        if not band_g_files or not band_r_files or band_g_files[0].filename == '' or band_r_files[0].filename == '':
+            return jsonify({'error': 'Ambas bandas deben contener archivos'}), 400
+        
+        # Verificación de cantidad corregida
+        if len(band_g_files) != len(band_r_files):
+            return jsonify({
+                'error': f'Diferente número de archivos: {len(band_g_files)} en banda g vs {len(band_r_files)} en banda r'
+            }), 400
 
-        print(f"📦 Procesando lote de {len(files)} imágenes...")
+        print(f"📦 Procesando {len(band_g_files)} pares de imágenes...")
         start_time = datetime.now()
         
-        results = []
-        for file in files:
-            if file.filename:
-                try:
-                    img_array = process_image(file)
-                    result = predict_image(img_array, file.filename)
-                    results.append(result)
-                    print(f"✅ {file.filename}: {result['label']} ({result['confidence']:.2%})")
-                except Exception as e:
-                    results.append({
-                        'filename': file.filename,
-                        'error': str(e),
-                        'success': False
-                    })
-                    print(f"❌ Error en {file.filename}: {e}")
+        imageList = []
+        galaxy_id_list = []
+        successful_pairs = 0
+        failed_pairs = 0
+        
+        # Procesar cada par de imágenes
+        for i, (g_file, r_file) in enumerate(zip(band_g_files, band_r_files)):
+            try:
+                galaxy_id = extract_galaxy_id(g_file.filename)
+                galaxy_id_list.append(galaxy_id)
+                
+                # Leer y procesar archivo FITS de banda g
+                g_file.save(f'temp_g_{i}.fits')
+                with fits.open(f'temp_g_{i}.fits') as hdul:
+                    g_data = np.nan_to_num(hdul[0].data)
+                os.remove(f'temp_g_{i}.fits')
+                
+                # Leer y procesar archivo FITS de banda r
+                r_file.save(f'temp_r_{i}.fits')
+                with fits.open(f'temp_r_{i}.fits') as hdul:
+                    r_data = np.nan_to_num(hdul[0].data)
+                os.remove(f'temp_r_{i}.fits')
+                
+                # Redimensionar y concatenar
+                g_resized = tf.image.resize(np.expand_dims(g_data, axis=-1), (60, 60))
+                r_resized = tf.image.resize(np.expand_dims(r_data, axis=-1), (60, 60))
+                
+                img = np.concatenate([g_resized, r_resized], axis=-1)
+                imageList.append(img)
+                
+                successful_pairs += 1
+                print(f"✅ Par {i+1}: {galaxy_id} procesado correctamente")
+                
+            except Exception as e:
+                failed_pairs += 1
+                print(f"❌ Error en par {i+1}: {e}")
 
-        # Estadísticas del lote
+        # Realizar predicción
+        x = np.stack(imageList)
+        predict = model.predict(x, verbose=0)
+        y_pred = (predict > .5479).astype(int)
+        
+        # Preparar resultados
+        results = []
+        for i, pred in enumerate(y_pred):
+            label = 'Elíptica' if pred[0] == 1 else 'Espiral'
+            results.append({
+                "galaxy_id": galaxy_id_list[i],
+                "label": label,
+                "confidence": float(predict[i][0])
+            })
+
+        # Estadísticas
         processing_time = (datetime.now() - start_time).total_seconds()
-        successful = sum(1 for r in results if r['success'])
         elliptical = sum(1 for r in results if r.get('label') == 'Elíptica')
         spiral = sum(1 for r in results if r.get('label') == 'Espiral')
 
-        response_data = {
+        return jsonify({
             'batch_id': start_time.strftime('%Y%m%d_%H%M%S'),
-            'total_images': len(files),
-            'successful_predictions': successful,
-            'failed_predictions': len(files) - successful,
+            'total_pairs': len(band_g_files),
+            'successful_pairs': successful_pairs,
+            'failed_pairs': failed_pairs,
             'elliptical_count': elliptical,
             'spiral_count': spiral,
             'processing_time_seconds': round(processing_time, 2),
@@ -249,32 +258,21 @@ def predict_batch():
             'system': 'ONC:ES v1.0',
             'results': results,
             'success': True
-        }
-
-        return jsonify(response_data)
+        })
 
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
-
-# Endpoint individual para compatibilidad
-@app.route('/predict_single', methods=['POST'])
-def predict_single():
-    if 'image' not in request.files:
-        return jsonify({'error': 'No se subió imagen'}), 400
-    
-    file = request.files['image']
-    if file.filename == '':
-        return jsonify({'error': 'No se seleccionó archivo'}), 400
-
-    try:
-        img_array = process_image(file)
-        result = predict_image(img_array, file.filename)
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({'error': str(e), 'success': False}), 500
+@app.route('/health')
+def health_check():
+    return jsonify({
+        'status': 'healthy',
+        'model_loaded': model is not None,
+        'version': 'ONC:ES v1.0 - Dual Band'
+    })
 
 if __name__ == '__main__':
-    print("🌌 ONC:ES System Initialized")
+    print("🌌 ONC:ES Optimized Neural Classifier: Elliptical vs Spiral")
     print("📊 Model: m_final.keras")
+    print("🎯 Endpoint: /predict_dual_band")
     print("🚀 Server: http://localhost:5000")
     app.run(host='0.0.0.0', port=5000, debug=False)
